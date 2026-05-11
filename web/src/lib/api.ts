@@ -1062,6 +1062,26 @@ export interface SystemActionResponse {
 // API client with typed methods
 const DEFAULT_TIMEOUT_MS = 30000;
 
+/**
+ * On 401/409-setup-required responses, send the user to /login.
+ *
+ * Runs in the browser only and never on the login page itself (to avoid
+ * a redirect loop while signing in). The current URL is preserved in the
+ * `redirect` query param so we can bounce back after a successful login.
+ */
+function redirectToLoginIfNeeded(res: globalThis.Response): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.pathname.startsWith("/login")) return false;
+  if (res.status === 401) {
+    const target = encodeURIComponent(
+      window.location.pathname + window.location.search,
+    );
+    window.location.assign(`/login?redirect=${target}`);
+    return true;
+  }
+  return false;
+}
+
 async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options ?? {};
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -1074,6 +1094,11 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
     res = await fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
       signal,
+      // Send the session cookie on every API call so auth-protected
+      // endpoints work when FIESTABOARD_AUTH_ENABLED is on. Same-origin
+      // requests already include cookies by default, but be explicit so
+      // future cross-origin deployments behave the same way.
+      credentials: fetchOptions.credentials ?? "include",
       headers: {
         "Content-Type": "application/json",
         ...fetchOptions.headers,
@@ -1083,6 +1108,7 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
     throw err;
   }
   if (!res.ok) {
+    redirectToLoginIfNeeded(res);
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
   return res.json();
@@ -1790,4 +1816,21 @@ export const api = {
     }
     return (await res.json()) as AIGenerateResult;
   },
+
+  // --- Auth -----------------------------------------------------------
+  // The login/setup forms talk to /api/auth/* directly (see
+  // web/src/app/login/page.tsx) because they need access to the response
+  // `detail` field. The helpers below are for the rest of the UI — e.g.
+  // a "Sign out" button in the profile menu.
+
+  getAuthStatus: () =>
+    fetchApi<{
+      enabled: boolean;
+      setup_required: boolean;
+      authenticated: boolean;
+      username: string | null;
+    }>("/auth/status"),
+
+  logout: () =>
+    fetchApi<{ status: string }>("/auth/logout", { method: "POST" }),
 };
