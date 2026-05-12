@@ -33,6 +33,7 @@ import {
 import { PageLayout } from "@/components/page-layout";
 import { PageHeader } from "@/components/page-header";
 import { LanguageSelector } from "@/components/language-selector";
+import { AccountSection } from "@/components/account-section";
 import { api } from "@/lib/api";
 import { useStatus } from "@/hooks/use-board";
 import { useFormatPreferences } from "@/hooks/use-format-preferences";
@@ -174,6 +175,11 @@ export default function ProfilePage() {
       <PageHeader icon={User} title={t("title")} description={t("description")} />
 
       <div className="space-y-6">
+        {/* ── 0. Account (visible only when auth is enabled) ──────────────── */}
+        <div className="animate-card-fade-in" style={{ animationDelay: "0ms" }}>
+          <AccountSection />
+        </div>
+
         {/* ── 1. Instance Name ─────────────────────────────────────────────── */}
         <div className="animate-card-fade-in" style={{ animationDelay: "0ms" }}>
           <Card>
